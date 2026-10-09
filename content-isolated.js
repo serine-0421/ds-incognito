@@ -1,0 +1,116 @@
+(function () {
+  'use strict';
+  var STATE_KEY = 'ds_incognito_state';
+  var SID_RE = /\/a\/chat\/s\/([0-9a-f-]{36})/;
+
+  function loadState() {
+    try {
+      var raw = sessionStorage.getItem(STATE_KEY);
+      if (!raw) return { enabled: false, baseline: [], pending: [] };
+      var s = JSON.parse(raw);
+      s.baseline = s.baseline || [];
+      s.pending = s.pending || [];
+      return s;
+    } catch (e) { return { enabled: false, baseline: [], pending: [] }; }
+  }
+  function saveState(s) {
+    try { sessionStorage.setItem(STATE_KEY, JSON.stringify(s)); } catch (e) {}
+  }
+  function currentSid() {
+    var m = location.pathname.match(SID_RE);
+    return m ? m[1] : null;
+  }
+  function sidebarIds() {
+    var set = {};
+    var list = document.querySelectorAll('a[href^="/a/chat/s/"]');
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i].getAttribute('href').match(SID_RE);
+      if (m) set[m[1]] = 1;
+    }
+    return Object.keys(set);
+  }
+
+  var state = loadState();
+
+  function syncToBackground() {
+    try {
+      chrome.runtime.sendMessage({
+        type: 'update-state',
+        enabled: !!state.enabled,
+        pending: state.pending || []
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
+  var lastUrl = location.href;
+  setInterval(function () {
+    if (location.href === lastUrl) return;
+    lastUrl = location.href;
+    onUrlChange();
+  }, 500);
+
+  function onUrlChange() {
+    if (!state.enabled) return;
+    var sid = currentSid();
+    if (!sid) return;
+    if (state.baseline.indexOf(sid) !== -1) return;
+    if (state.pending.indexOf(sid) !== -1) return;
+    state.pending.push(sid);
+    saveState(state);
+    syncToBackground();
+    updateUI();
+  }
+
+  function toggle() {
+    if (state.enabled) {
+      state = { enabled: false, baseline: [], pending: [] };
+    } else {
+      var baseline = sidebarIds();
+      var cur = currentSid();
+      if (cur && baseline.indexOf(cur) === -1) baseline.push(cur);
+      if (baseline.length === 0) {
+        alert('无痕模式：未能读取到侧边栏会话列表，请等页面加载完成后再开启。');
+        return;
+      }
+      state = { enabled: true, baseline: baseline, pending: [] };
+    }
+    saveState(state);
+    syncToBackground();
+    updateUI();
+  }
+
+  var btn = null;
+  function createUI() {
+    btn = document.createElement('div');
+    btn.id = 'ds-incognito-btn';
+    btn.style.cssText = [
+      'position:fixed', 'right:20px', 'bottom:20px', 'z-index:2147483647',
+      'padding:10px 14px', 'border-radius:20px', 'font-size:13px',
+      'font-family:system-ui,-apple-system,sans-serif', 'cursor:pointer',
+      'user-select:none', 'box-shadow:0 2px 10px rgba(0,0,0,.25)',
+      'transition:background .15s,color .15s'
+    ].join(';');
+    btn.addEventListener('click', toggle);
+    document.body.appendChild(btn);
+    updateUI();
+  }
+  function updateUI() {
+    if (!btn) return;
+    if (state.enabled) {
+      btn.textContent = '无痕模式：已开启 (待删 ' + state.pending.length + ')';
+      btn.style.background = '#d9534f';
+      btn.style.color = '#fff';
+    } else {
+      btn.textContent = '无痕模式：已关闭';
+      btn.style.background = '#2b2b2b';
+      btn.style.color = '#ddd';
+    }
+  }
+
+  if (document.body) createUI();
+  else new MutationObserver(function (_, o) {
+    if (document.body) { o.disconnect(); createUI(); }
+  }).observe(document.documentElement, { childList: true });
+
+  syncToBackground();
+})();
