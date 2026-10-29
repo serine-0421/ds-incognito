@@ -23,10 +23,30 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
 chrome.runtime.onMessage.addListener((msg, sender) => {
   if (!sender || !sender.tab) return;
   const tabId = sender.tab.id;
+  
   if (msg.type === 'update-state') {
     sset({ ['tab_' + tabId]: { enabled: !!msg.enabled, pending: msg.pending || [] } });
+  } else if (msg.type === 'doc-extracted') {
+    // 接收到提取成功的信号，寻找或新建 DS 标签页
+    handleDocInjection();
   }
 });
+
+// 新增处理文档注入的函数
+async function handleDocInjection() {
+  const tabs = await chrome.tabs.query({ url: '*://chat.deepseek.com/*' });
+  if (tabs.length > 0) {
+    // 如果有打开的 DS 页面，激活它并发送注入消息
+    await chrome.tabs.update(tabs[0].id, { active: true });
+    // 稍等一下确保标签页切换完成
+    setTimeout(() => chrome.tabs.sendMessage(tabs[0].id, { type: 'inject-doc' }), 300);
+  } else {
+    // 没有就新建一个
+    const newTab = await chrome.tabs.create({ url: 'https://chat.deepseek.com' });
+    // 新标签页加载需要时间，延迟发送
+    setTimeout(() => chrome.tabs.sendMessage(newTab.id, { type: 'inject-doc' }), 2500);
+  }
+}
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   const key = 'tab_' + tabId;

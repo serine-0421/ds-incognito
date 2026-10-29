@@ -70,17 +70,7 @@
 
         // 通知用户并在现有 DS 标签页中打开
         btn.textContent = '发送中...';
-        
-        const tabs = await chrome.tabs.query({ url: '*://chat.deepseek.com/*' });
-        if (tabs.length > 0) {
-          // 如果已经打开了 DS，就激活并发送
-          await chrome.tabs.update(tabs[0].id, { active: true });
-          await chrome.tabs.sendMessage(tabs[0].id, { type: 'inject-doc' });
-        } else {
-          // 如果没有打开，就新建一个
-          await chrome.tabs.create({ url: 'https://chat.deepseek.com' });
-          // 注意：新建的标签页可能需要稍等加载后才能注入，我们会在 DS 侧做延迟检测
-        }
+        chrome.runtime.sendMessage({ type: 'doc-extracted' });
         
         btn.textContent = '✅ 已发送';
         setTimeout(() => {
