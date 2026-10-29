@@ -114,3 +114,45 @@
 
   syncToBackground();
 })();
+  // ====== 新增：接收文库文档并填入 DS 输入框 ======
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.type === 'inject-doc') {
+      chrome.storage.local.get('docToDS', (data) => {
+        if (!data.docToDS || !data.docToDS.content) return;
+        
+        const { title, content } = data.docToDS;
+        // 构造 Prompt
+        const prompt = `我刚刚提取了文档《${title}》的内容。请帮我基于以下内容进行分析：\n\n${content}\n\n---\n（注意：以上为文档全文，请直接针对我的问题进行解答。如果文档内容不完整或断层，请告诉我。）\n\n我的问题：`;
+        
+        // 寻找输入框
+        const textarea = document.querySelector('textarea');
+        if (textarea) {
+          // 设置输入框的值 (需要触发 React 的 input 事件)
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+          nativeInputValueSetter.call(textarea, prompt);
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          
+          // 清理存储，防止重复发送
+          chrome.storage.local.remove('docToDS');
+          
+          // 提示用户
+          console.log('文档已填入 DS 输入框，请点击发送。');
+          // 可以加一个页面内提示
+          const toast = document.createElement('div');
+          toast.textContent = '文档已填入输入框，请按回车发送';
+          toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#4CAF50;color:white;padding:10px 20px;border-radius:4px;z-index:9999;font-family:sans-serif;';
+          document.body.appendChild(toast);
+          setTimeout(() => toast.remove(), 3000);
+        }
+      });
+    }
+  });
+
+  // 如果用户是刚打开的 DS 页面（由后台新建），主动检查一次
+  setTimeout(() => {
+    chrome.storage.local.get('docToDS', (data) => {
+      if (data.docToDS) {
+        chrome.runtime.sendMessage({ type: 'inject-doc' }); // 触发上面的逻辑
+      }
+    });
+  }, 2000);

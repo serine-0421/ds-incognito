@@ -1,20 +1,29 @@
 {
   "manifest_version": 3,
-  "name": "DeepSeek Incognito",
-  "version": "0.2.1",
-  "description": "DeepSeek 网页端无痕模式：新建的对话在关闭标签页后自动删除。",
+  "name": "DeepSeek Incognito & Doc Extractor",
+  "version": "0.3.0",
+  "description": "DeepSeek 无痕模式，并支持将文库网页全文一键喂给 DeepSeek。",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
   "permissions": ["storage", "tabs", "webRequest"],
-  "host_permissions": ["https://chat.deepseek.com/*"],
+  "host_permissions": [
+    "https://chat.deepseek.com/*",
+    "*://*.doc88.com/*",
+    "*://*.wenku.baidu.com/*"
+  ],
   "background": { "service_worker": "background.js" },
   "content_scripts": [
     {
       "matches": ["https://chat.deepseek.com/*"],
       "js": ["content-isolated.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.doc88.com/*", "*://*.wenku.baidu.com/*"],
+      "js": ["content-doc.js"],
       "run_at": "document_idle"
     }
   ]
